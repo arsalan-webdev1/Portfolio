@@ -1,0 +1,1 @@
+No build or install step — serve the `files/` directory with any static server (e.g. `npx serve files`) to view the portfolio locally. Project previews reference local images under `files/images/` (e.g. `images/profilepicture.png.png`, `images/candybrand.png`).

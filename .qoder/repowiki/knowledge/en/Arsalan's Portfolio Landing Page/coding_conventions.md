@@ -1,0 +1,6 @@
+- Animation timing is driven by CSS custom properties set inline or via JS (`--d` for stagger delay, `--i` for pill index, `--fill` for timeline draw, `--px/--py` for mouse offset, `--rx/--ry` for tilt, `--mx/--my` for magnetic pull) so transitions stay declarative.
+- Scroll-triggered animations use `IntersectionObserver` adding a `.visible` / `.in` class, with elements initially styled with `opacity:0; translate: ...; filter: blur(...)` and transitioning to visible state.
+- Heavy DOM updates inside scroll/mouse handlers are throttled through a `scrollScheduled` / `glowScheduled` flag paired with `requestAnimationFrame` and `{ passive: true }` listeners.
+- Accessibility is handled by toggling `aria-expanded` on the burger button, using `aria-hidden="true"` for decorative orbs/nodes, and `aria-live="polite"` on the welcome overlay.
+- Motion-sensitive features check `prefers-reduced-motion` via `window.matchMedia` and skip animations or instantly reveal content when reduced motion is preferred.
+- External links open with `target="_blank" rel="noopener"` and the contact form is explicitly UI-only (`novalidate`, `preventDefault`, note text) since there is no backend.
