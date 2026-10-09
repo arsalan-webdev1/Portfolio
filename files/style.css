@@ -22,7 +22,7 @@ ul,ol{list-style:none}
 .section::before{content:"";position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(103,232,249,.22),rgba(167,139,250,.22),transparent)}
 
 /* ===== 1. Welcome interface (~2.1s total) ===== */
-.welcome-overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:1000;overflow:hidden;background:radial-gradient(circle at 50% 45%,#0b1020,#030408 70%);transition:opacity .6s var(--ease),visibility .6s}
+.welcome-overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:1000;overflow:hidden;touch-action:none;overscroll-behavior:contain;background:radial-gradient(circle at 50% 45%,#0b1020,#030408 70%);transition:opacity .6s var(--ease),visibility .6s}
 .welcome-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
 .welcome-orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:0;animation:orbIn 1.4s ease-out forwards}
 .orb-1{width:min(52vw,620px);aspect-ratio:1;background:radial-gradient(circle,rgba(56,189,248,.3),transparent 68%);top:6%;left:14%}
@@ -236,7 +236,10 @@ body.ready .chip{opacity:1;translate:none}
   *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
   .anim,[data-reveal],.skill .pills li,.t-card,.chip{opacity:1!important;translate:none!important;filter:none!important;scale:none!important}
   .t-item::before{transform:scaleX(1)}.node{scale:1}.timeline::after{transform:none}
-  .welcome-overlay{display:none}
+  /* Simplified welcome: same single word, no movement, blur or glow pulse; short opacity fade only */
+  .welcome-overlay .welcome-orb{opacity:.55}
+  .welcome-overlay .welcome-word{opacity:1!important;filter:none!important;transform:none!important;letter-spacing:.04em;text-shadow:0 0 18px rgba(103,232,249,.18)}
+  .welcome-overlay{transition:opacity .4s linear,visibility .4s!important}
 }
 
 /* ===== Responsive ===== */

@@ -25,17 +25,30 @@ document.addEventListener("DOMContentLoaded", () => {
   const welcomeOverlay = ensureWelcomeOverlay();
   document.body.classList.add("is-loading"); // locks scrolling while the intro plays
 
+  // Sequence (ms): welcome in -> brief hold -> exit -> portfolio reveal.
+  // Reduced motion keeps the welcome screen but shortens it and drops movement (see CSS).
+  const T = reducedMotion
+    ? { exit: 1100, reveal: 1400 }
+    : { exit: 1700, reveal: 2100 };
+  const FAILSAFE_MS = 4000; // portfolio always becomes accessible, even if something fails
+  const introTimers = [];
+  let revealed = false;
+
+  const exitIntro = () => welcomeOverlay.classList.add("hidden"); // fades overlay + word out
+
   const revealPortfolio = () => {
-    document.body.classList.remove("is-loading");
-    document.body.classList.add("ready");
-    if (welcomeOverlay) {
-      welcomeOverlay.classList.add("hidden");
-      setTimeout(() => welcomeOverlay.remove(), 900);
-    }
+    if (revealed) return; // idempotent: no duplicate reveals
+    revealed = true;
+    introTimers.forEach(clearTimeout);
+    exitIntro();
+    document.body.classList.remove("is-loading"); // scrolling returns
+    document.body.classList.add("ready");         // hero stagger starts
+    setTimeout(() => welcomeOverlay.remove(), 800);
   };
 
-  if (reducedMotion) revealPortfolio();
-  else setTimeout(revealPortfolio, 1800);
+  introTimers.push(setTimeout(exitIntro, T.exit));
+  introTimers.push(setTimeout(revealPortfolio, T.reveal));
+  introTimers.push(setTimeout(revealPortfolio, FAILSAFE_MS));
 
   // ===== Projects (render before observers so cards are included) =====
   renderProjects();
