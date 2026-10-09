@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const hasFinePointer = window.matchMedia("(any-pointer: fine)").matches; // mouse/trackpad/pen available
 
   // ===== Cinematic welcome intro → reveal the existing portfolio =====
   const ensureWelcomeOverlay = () => {
@@ -33,6 +33,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const FAILSAFE_MS = 4000; // portfolio always becomes accessible, even if something fails
   const introTimers = [];
   let revealed = false;
+  let onReady = null; // set below: reveals anything already in/above the viewport
+  const isReady = () => document.body.classList.contains("ready");
 
   const exitIntro = () => welcomeOverlay.classList.add("hidden"); // fades overlay + word out
 
@@ -41,8 +43,9 @@ document.addEventListener("DOMContentLoaded", () => {
     revealed = true;
     introTimers.forEach(clearTimeout);
     exitIntro();
-    document.body.classList.remove("is-loading"); // scrolling returns
+    document.body.classList.remove("is-loading"); // scrolling returns; nav + main fade in (CSS)
     document.body.classList.add("ready");         // hero stagger starts
+    if (onReady) onReady();                       // deep links / restored scroll positions
     setTimeout(() => welcomeOverlay.remove(), 800);
   };
 
@@ -71,9 +74,10 @@ document.addEventListener("DOMContentLoaded", () => {
     scrollScheduled = false;
     const max = document.documentElement.scrollHeight - window.innerHeight;
     const progress = max > 0 ? Math.min(Math.max(window.scrollY / max, 0), 1) : 0;
-    progressFill.style.transform = `scaleX(${progress.toFixed(4)})`;
+    progressFill.style.transform = `scaleX(${progress.toFixed(4)})`; // compositor-only
     backToTop.classList.toggle("visible", window.scrollY > 320);
     nav.classList.toggle("scrolled", window.scrollY > 12);
+    if (onReady && isReady()) onReady();
     // Timeline line "draws" itself while the section passes through the viewport
     if (timeline && !reducedMotion) {
       const rect = timeline.getBoundingClientRect();
@@ -103,21 +107,56 @@ document.addEventListener("DOMContentLoaded", () => {
   navLinks.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => setMenu(false)));
 
   // ===== Scroll reveal (group stagger via --d set in HTML/above) =====
+  // Track pending elements in Sets so the safety sweep below can bail out instantly
+  // once everything is revealed (it used to re-query the whole DOM every scroll frame).
+  const pendingReveals = new Set(document.querySelectorAll("[data-reveal]"));
   const revealObserver = new IntersectionObserver((entries) => {
-    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("visible"); revealObserver.unobserve(e.target); } });
+    entries.forEach((e) => {
+      if (e.isIntersecting && isReady()) {
+        e.target.classList.add("visible");
+        revealObserver.unobserve(e.target);
+        pendingReveals.delete(e.target);
+      }
+    });
   }, { threshold: 0.15 });
-  document.querySelectorAll("[data-reveal]").forEach((el) => revealObserver.observe(el));
+  pendingReveals.forEach((el) => revealObserver.observe(el));
 
   // ===== Timeline: nodes + cards activate one by one while scrolling =====
+  // (also used with reduced motion: CSS strips the movement, leaving a simple fade)
   const tItems = document.querySelectorAll(".t-item");
-  if (tItems.length && !reducedMotion) {
-    const timelineObserver = new IntersectionObserver((entries) => {
-      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); timelineObserver.unobserve(e.target); } });
-    }, { threshold: 0.35 });
-    tItems.forEach((item) => timelineObserver.observe(item));
-  } else {
-    tItems.forEach((item) => item.classList.add("in"));
-  }
+  const pendingItems = new Set(tItems);
+  const timelineObserver = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting && isReady()) {
+        e.target.classList.add("in");
+        timelineObserver.unobserve(e.target);
+        pendingItems.delete(e.target);
+      }
+    });
+  }, { threshold: 0.35 });
+  tItems.forEach((item) => timelineObserver.observe(item));
+
+  // ===== Safety net: observers only report threshold *crossings*, so anything skipped by a fast
+  // scroll, anchor jump, refresh mid-page or resize would stay hidden. Reveal whatever is in or
+  // above the viewport. Throttled to 180ms and skipped entirely once nothing is pending, so it
+  // never competes with the scroll timeline for frame budget.
+  let lastSweep = 0;
+  const sweepReveals = (force = false) => {
+    if (!pendingReveals.size && !pendingItems.size) { onReady = null; return; }
+    const now = performance.now();
+    if (!force && now - lastSweep < 180) return;
+    lastSweep = now;
+    const edge = window.innerHeight - 80;
+    const passed = (el) => { const r = el.getBoundingClientRect(); return r.bottom < 0 || r.top < edge; };
+    pendingReveals.forEach((el) => {
+      if (passed(el)) { el.classList.add("visible"); revealObserver.unobserve(el); pendingReveals.delete(el); }
+    });
+    pendingItems.forEach((el) => {
+      if (passed(el)) { el.classList.add("in"); timelineObserver.unobserve(el); pendingItems.delete(el); }
+    });
+  };
+  onReady = () => sweepReveals(true);
+  if (isReady()) sweepReveals(true);
 
   // ===== Active nav link + sliding indicator + per-section background mood =====
   const links = [...navLinks.querySelectorAll('a[href^="#"]')];
@@ -150,29 +189,25 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { rootMargin: "-45% 0px -50% 0px" });
   document.querySelectorAll("main section[id]").forEach((s) => sectionObserver.observe(s));
   window.addEventListener("resize", moveIndicator);
+  // Font loading can shift link widths after first paint — re-align the pill once fonts settle.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveIndicator);
 
   // ===== Desktop-only pointer effects =====
-  if (!coarsePointer && !reducedMotion) {
-    // Mouse-reactive ambient glow (very small offsets; CSS eases the motion)
-    let glowX = 0, glowY = 0, glowScheduled = false;
-    window.addEventListener("pointermove", (event) => {
-      glowX = (event.clientX / window.innerWidth - 0.5) * 10;
-      glowY = (event.clientY / window.innerHeight - 0.5) * 8;
-      if (!glowScheduled) {
-        glowScheduled = true;
-        requestAnimationFrame(() => {
-          glowScheduled = false;
-          document.documentElement.style.setProperty("--px", glowX.toFixed(2));
-          document.documentElement.style.setProperty("--py", glowY.toFixed(2));
-        });
-      }
-    }, { passive: true });
-
-    // Magnetic pull on primary CTAs (max ~5px, smooth return via CSS transition)
+  if (hasFinePointer && !reducedMotion) {
+    // Single pointermove listener drives BOTH the ambient glow and the magnetic buttons,
+    // inside one rAF loop. The glow eases toward its target with a lerp (buttery trailing
+    // motion with no CSS transition fighting it), and the loop stops when it settles —
+    // no competing animation loops, no work while the pointer is idle.
+    const root = document.documentElement;
     const magnets = [...document.querySelectorAll(".btn-primary, .nav-gh")];
-    let mx = 0, my = 0, magnetScheduled = false;
+
+    let mx = 0, my = 0;              // raw pointer position
+    let tx = 0, ty = 0;              // glow target (pointer-derived)
+    let cx = 0, cy = 0;              // glow current (eased)
+    let magnetsDirty = false;        // pointer moved since magnets were last applied
+    let rafId = 0;
+
     const applyMagnets = () => {
-      magnetScheduled = false;
       magnets.forEach((btn) => {
         const r = btn.getBoundingClientRect();
         const dx = mx - (r.left + r.width / 2);
@@ -189,24 +224,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     };
+
+    const frame = () => {
+      rafId = 0;
+      // Ease the glow toward the pointer target; 0.14/frame ≈ soft, premium trailing.
+      cx += (tx - cx) * 0.14;
+      cy += (ty - cy) * 0.14;
+      root.style.setProperty("--px", cx.toFixed(2));
+      root.style.setProperty("--py", cy.toFixed(2));
+      if (magnetsDirty) { magnetsDirty = false; applyMagnets(); }
+      const settled = Math.abs(tx - cx) < 0.05 && Math.abs(ty - cy) < 0.05 && !magnetsDirty;
+      if (!settled) rafId = requestAnimationFrame(frame); // idle = zero rAF work
+    };
+
     window.addEventListener("pointermove", (event) => {
-      mx = event.clientX; my = event.clientY;
-      if (!magnetScheduled) { magnetScheduled = true; requestAnimationFrame(applyMagnets); }
+      if (event.pointerType === "touch") return;
+      mx = event.clientX;
+      my = event.clientY;
+      tx = (mx / window.innerWidth - 0.5) * 10;
+      ty = (my / window.innerHeight - 0.5) * 8;
+      magnetsDirty = true;
+      if (!rafId) rafId = requestAnimationFrame(frame);
     }, { passive: true });
 
-    // Subtle 3D tilt (max ~4deg) on the portrait + featured project cards
+    // Subtle 3D tilt (max ~4deg) on the portrait + featured project cards.
+    // Each card applies its transform at most once per frame, so rapid pointer
+    // movement never queues more writes than the compositor can consume.
     document.querySelectorAll(".tilt-card").forEach((card) => {
+      let raf = 0, nx = 0, ny = 0;
+      const apply = () => {
+        raf = 0;
+        card.style.setProperty("--ry", `${(nx * 8).toFixed(2)}deg`);
+        card.style.setProperty("--rx", `${(-ny * 8).toFixed(2)}deg`);
+      };
       card.addEventListener("pointermove", (event) => {
+        if (event.pointerType === "touch") return;
         const r = card.getBoundingClientRect();
-        const px = (event.clientX - r.left) / r.width;
-        const py = (event.clientY - r.top) / r.height;
-        card.style.setProperty("--ry", `${((px - 0.5) * 8).toFixed(2)}deg`);
-        card.style.setProperty("--rx", `${((0.5 - py) * 8).toFixed(2)}deg`);
+        nx = (event.clientX - r.left) / r.width - 0.5;
+        ny = (event.clientY - r.top) / r.height - 0.5;
+        if (!raf) raf = requestAnimationFrame(apply);
       });
-      card.addEventListener("pointerleave", () => {
+      const reset = () => {
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
         card.style.setProperty("--rx", "0deg");
         card.style.setProperty("--ry", "0deg");
-      });
+      };
+      card.addEventListener("pointerleave", reset);
+      card.addEventListener("pointercancel", reset);
     });
   }
 
@@ -246,7 +310,7 @@ function renderProjects() {
     <article class="project glass tilt-card" data-reveal>
       <div class="preview">
         <div class="mock" aria-hidden="true"><i></i><i></i><i></i><div></div></div>
-        ${p.image ? `<img src="${p.image}" alt="${p.name} preview" onerror="this.remove()">` : ""}
+        ${p.image ? `<img src="${p.image}" alt="${p.name} preview" loading="lazy" decoding="async" onerror="this.remove()">` : ""}
       </div>
       <div class="p-body">
         <h3>${p.name}</h3>
