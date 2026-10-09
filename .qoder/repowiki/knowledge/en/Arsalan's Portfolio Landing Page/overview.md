@@ -1,1 +1,0 @@
-Single-page portfolio site for Arsalan, a full-stack developer in progress, featuring a cinematic welcome intro, glassmorphism UI, scroll-driven animations, and a JS-rendered project gallery.

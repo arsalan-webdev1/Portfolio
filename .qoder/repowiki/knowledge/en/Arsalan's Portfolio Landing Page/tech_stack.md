@@ -1,1 +1,0 @@
-Vanilla HTML5 + CSS3 (CSS custom properties, `backdrop-filter`, `translate`/`scale` transforms, `@media` queries) and plain ES6 JavaScript using `IntersectionObserver`, `matchMedia`, and `requestAnimationFrame`; no framework or bundler.
