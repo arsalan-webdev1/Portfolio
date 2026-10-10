@@ -300,6 +300,14 @@ const projects = [
     repo: "",
     image: "images/candybrand.png",
     tags: [] // add tags only when known, e.g. ["HTML", "CSS"]
+  },
+  {
+    name: "Pulseboard",
+    description: "A SaaS growth platform landing page presenting product, marketing, and revenue signals in one polished dashboard experience.",
+    live: "https://saas-land-pg.netlify.app/",
+    repo: "",
+    image: "images/pulseboard.png",
+    tags: ["SaaS Landing Page", "Growth Analytics"]
   }
 ];
 
